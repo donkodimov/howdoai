@@ -9,9 +9,8 @@ class TestHowDoAI(unittest.TestCase):
         self.maxDiff = None  # This will show the full diff for any failures
 
     @patch('sys.argv', ['howdoai', 'how to create a tar archive'])
-    @patch('sys.stdout', new_callable=StringIO)
     @patch('requests.post')
-    def test_response_with_code(self, mock_post, mock_stdout):
+    def test_response_with_code(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -25,21 +24,14 @@ class TestHowDoAI(unittest.TestCase):
         }
         mock_post.return_value = mock_response
 
-        main()
+        result = main()
 
-        expected_output = "<code>\ntar -cvf archive.tar file1 file2 directory/\n</code>\n"
-        actual_output = mock_stdout.getvalue()
-        
-        with self.subTest("Outputs"):
-            print(f"\nExpected output:\n{expected_output}")
-            print(f"Actual output:\n{actual_output}")
-        
-        self.assertEqual(actual_output, expected_output)
+        expected_output = "<code>\ntar -cvf archive.tar file1 file2 directory/\n</code>"
+        self.assertEqual(result, expected_output)
 
     @patch('sys.argv', ['howdoai', 'what is the capital of France'])
-    @patch('sys.stdout', new_callable=StringIO)
     @patch('requests.post')
-    def test_response_without_code(self, mock_post, mock_stdout):
+    def test_response_without_code(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -53,24 +45,23 @@ class TestHowDoAI(unittest.TestCase):
         }
         mock_post.return_value = mock_response
 
-        main()
+        result = main()
 
-        expected_output = "<result>The capital of France is Paris.</result>\n"
-        self.assertEqual(mock_stdout.getvalue(), expected_output)
+        expected_output = "<result>The capital of France is Paris.</result>"
+        self.assertEqual(result, expected_output)
 
     @patch('sys.argv', ['howdoai', 'test query'])
-    @patch('sys.stdout', new_callable=StringIO)
     @patch('requests.post')
-    def test_error_response(self, mock_post, mock_stdout):
+    def test_error_response(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 500
         mock_response.text = "Internal Server Error"
         mock_post.return_value = mock_response
 
-        main()
+        result = main()
 
-        expected_output = "Error: Request failed with status code 500\nResponse: Internal Server Error\n"
-        self.assertEqual(mock_stdout.getvalue(), expected_output)
+        expected_output = "Error: Request failed with status code 500\nResponse: Internal Server Error"
+        self.assertEqual(result, expected_output)
 
 class TestHowDoAIIntegration(unittest.TestCase):
     def setUp(self):
