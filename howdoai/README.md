@@ -149,7 +149,7 @@ If you encounter any issues while using `howdoai`, try the following:
 ## Error Handling
 
 `howdoai` is designed to handle various error scenarios gracefully. If an error occurs during the API call or response processing, the tool will display an error message explaining what went wrong.
-```
+
 
 ## Contributing
 
@@ -160,3 +160,57 @@ If you'd like to contribute to the `howdoai` CLI tool, please follow these steps
 3. Make your changes and commit them with descriptive commit messages.
 4. Push your changes to your forked repository.
 5. Submit a pull request to the main repository.
+
+## Git Branching Strategy
+
+This project follows a Git branching model inspired by [Vincent Driessen's branching model](https://nvie.com/posts/a-successful-git-branching-model/). This strategy helps us manage releases, feature development, and hotfixes in a structured manner.
+
+### Main Branches
+
+- `main`: This branch contains production-ready code. All releases are merged into and tagged on this branch.
+- `develop`: This is the main branch for development, where features are integrated.
+
+### Supporting Branches
+
+- `feature/*`: Used for developing new features or improvements. These branch off from and merge back into `develop`.
+- `release/*`: Used for preparing releases. These branch off from `develop` and merge into both `main` and `develop`.
+- `hotfix/*`: Used for quick fixes to production code. These branch off from `main` and merge into both `main` and `develop`.
+
+### Workflow
+
+1. **Feature Development**
+   - Create a new branch from `develop`: `git checkout -b feature/my-new-feature develop`
+   - Develop and commit changes
+   - Open a pull request to merge back into `develop`
+
+2. **Preparing a Release**
+   - Create a release branch from `develop`: `git checkout -b release/v1.2.0 develop`
+   - Make minor bug fixes and prepare release metadata
+   - Merge into `main` and `develop` when ready
+   - Tag the release on `main`: `git tag -a v1.2.0 -m "Release version 1.2.0"`
+
+3. **Hotfixes**
+   - Create a hotfix branch from `main`: `git checkout -b hotfix/critical-bug main`
+   - Fix the issue and commit changes
+   - Merge into both `main` and `develop`
+   - Tag the hotfix on `main`: `git tag -a v1.2.1 -m "Hotfix version 1.2.1"`
+
+### Branch Naming Conventions
+
+- Feature branches: `feature/add-max-words-option`
+- Release branches: `release/v1.2.0`
+- Hotfix branches: `hotfix/fix-api-connection-issue`
+
+### Tagging
+
+We use semantic versioning (e.g., v1.2.3) for release tags.
+
+### Pull Requests and Code Reviews
+
+All merges to `develop` and `main` branches must go through a pull request and code review process.
+
+### Continuous Integration
+
+Our CI pipeline runs tests on all feature branches and the `develop` branch. Successful builds on `main` are automatically deployed to production.
+
+For more detailed information about this branching strategy, please refer to [Vincent Driessen's article](https://nvie.com/posts/a-successful-git-branching-model/).
