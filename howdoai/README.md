@@ -46,6 +46,12 @@ You can use `howdoai` in two ways:
    print(result)
    ```
 
+You can also limit the number of words in the response using the `--max-words` option:
+
+```
+howdoai --max-words 20 "how to create a tar archive"
+```
+
 The `howdoai` tool will query the AI endpoint and provide you with a concise answer to your question. If the answer contains code, it will be wrapped in triple backticks (```).
 
 ## Examples
@@ -95,20 +101,26 @@ Feel free to ask any "how-to" question, and the `howdoai` tool will provide you 
 
 ## Configuration
 
-The `howdoai` CLI tool uses a pre-configured AI endpoint to generate answers. If you want to modify the endpoint or adjust the AI model settings, you can update the `data` dictionary in the `howdoai.py` script:
+The `howdoai` CLI tool uses a pre-configured AI endpoint to generate answers. If you want to modify the endpoint or adjust the AI model settings, you can update the `API_URL` and `call_ai_api` function in the `__init__.py` file:
 
 ```python
-data = {
-    "model": "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF",
-    "messages": [
-        {"role": "system", "content": "You are an AI assistant that provides concise, one-line answers with the best example of how to complete a task. If the answer contains code, wrap it in triple backticks (```)."},
-        {"role": "user", "content": query}
-    ],
-    "temperature": 0.7,
-    "max_tokens": 100,
-    "stream": True
-}
+API_URL = "http://localhost:1234/v1/chat/completions"
+
+def call_ai_api(query: str) -> Dict[str, Any]:
+    headers = {"Content-Type": "application/json"}
+    data = {
+        "model": "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF",
+        "messages": [
+            {"role": "system", "content": SYSTEM_MESSAGE},
+            {"role": "user", "content": query if query else ""}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 100,
+        "stream": False
+    }
+    ...
 ```
+
 ## Testing
 
 To run the tests, use the following command from the root directory of the project:
@@ -118,6 +130,26 @@ python -m unittest discover tests
 ```
 
 You can change the `model`, `temperature`, `max_tokens`, and other parameters according to your requirements.
+
+Note: The test suite includes integration tests that make actual API calls. To skip these tests, set the `SKIP_INTEGRATION_TESTS` environment variable:
+
+```
+export SKIP_INTEGRATION_TESTS=1
+python -m unittest discover tests
+```
+## Troubleshooting
+
+If you encounter any issues while using `howdoai`, try the following:
+
+1. Ensure you're using Python 3.6 or higher.
+2. Check your internet connection, as the tool requires access to the AI endpoint.
+3. If you receive an error about the AI endpoint, make sure it's running and accessible.
+4. For any other issues, please open an issue on the GitHub repository.
+
+## Error Handling
+
+`howdoai` is designed to handle various error scenarios gracefully. If an error occurs during the API call or response processing, the tool will display an error message explaining what went wrong.
+```
 
 ## Contributing
 
