@@ -1,11 +1,15 @@
 import requests
 import json
 import sys
+import argparse
 
-def main(query=None):
-    if query is None:
-        query = sys.argv[1] if len(sys.argv) > 1 else ""
+def truncate_to_word_limit(text, max_words):
+    words = text.split()
+    if len(words) <= max_words:
+        return text
+    return ' '.join(words[:max_words]) + '...'
 
+def main(query, max_words=None):
     url = "http://localhost:1234/v1/chat/completions"
     headers = {"Content-Type": "application/json"}
     data = {
@@ -33,26 +37,34 @@ def main(query=None):
                 code = answer[code_start:code_end].strip()
                 output = f"<code>\n{code}\n</code>"
             else:
+                if max_words:
+                    answer = truncate_to_word_limit(answer, max_words)
                 output = f"<result>{answer}</result>"
 
-            return output  # Only return the output, don't print it here
+            return output
 
         else:
-            error_message = f"Error: Request failed with status code {response.status_code}\nResponse: {response.text}"
-            return error_message
+            return f"Error: Request failed with status code {response.status_code}\nResponse: {response.text}"
 
     except requests.exceptions.RequestException as e:
-        error_message = f"Error: An unexpected error occurred while making the request\n{str(e)}"
-        return error_message
+        return f"Error: An unexpected error occurred while making the request\n{str(e)}"
 
     except (KeyError, IndexError, json.JSONDecodeError) as e:
-        error_message = f"Error: An unexpected error occurred while parsing the response\n{str(e)}"
-        return error_message
-    
+        return f"Error: An unexpected error occurred while parsing the response\n{str(e)}"
+
 def main_cli():
-    result = main()
+    parser = argparse.ArgumentParser(description='Get concise answers to how-to questions.')
+    parser.add_argument('query', nargs='?', help='The question to ask')
+    parser.add_argument('--max-words', type=int, help='Maximum number of words in the response')
+    
+    args = parser.parse_args()
+    
+    if not args.query:
+        parser.print_help()
+        sys.exit(1)
+    
+    result = main(args.query, args.max_words)
     print(result)
 
 if __name__ == "__main__":
-    result = main()
-    print(result)  # Print the result only when run as a script
+    main_cli()
