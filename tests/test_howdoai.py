@@ -2,15 +2,17 @@ import unittest
 from unittest.mock import patch, MagicMock
 from io import StringIO
 import sys
-from howdoai import main, main_cli, call_ai_api, format_response
+from howdoai import main, main_cli, call_ai_api, format_response, generate_follow_up_questions
 import requests
 import os
+
 
 def integration_test(func):
     return unittest.skipIf(
         'SKIP_INTEGRATION_TESTS' in os.environ,
         'Skipping integration tests'
     )(func)
+
 
 class TestHowDoAI(unittest.TestCase):
     def setUp(self):
@@ -30,8 +32,14 @@ class TestHowDoAI(unittest.TestCase):
 
         result = main("how to create a tar archive")
 
-        expected_output = "<code>\ntar -cvf archive.tar file1 file2 directory/\n</code>"
-        self.assertEqual(result, expected_output)
+        expected_output = {
+            "answer": "<code>\ntar -cvf archive.tar file1 file2 directory/\n</code>",
+            # We don't know the exact questions, so we accept what's generated
+            "follow_up_questions": result["follow_up_questions"]
+        }
+        self.assertEqual(result["answer"], expected_output["answer"])
+        self.assertIsInstance(result["follow_up_questions"], list)
+        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
 
     @patch('howdoai.call_ai_api')
     def test_response_without_code(self, mock_call_ai_api):
@@ -47,8 +55,14 @@ class TestHowDoAI(unittest.TestCase):
 
         result = main("what is the capital of France")
 
-        expected_output = "<result>The capital of France is Paris.</result>"
-        self.assertEqual(result, expected_output)
+        expected_output = {
+            "answer": "<result>The capital of France is Paris.</result>",
+            # We don't know the exact questions, so we accept what's generated
+            "follow_up_questions": result["follow_up_questions"]
+        }
+        self.assertEqual(result["answer"], expected_output["answer"])
+        self.assertIsInstance(result["follow_up_questions"], list)
+        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
 
     @patch('howdoai.call_ai_api')
     def test_error_response(self, mock_call_ai_api):
@@ -57,7 +71,8 @@ class TestHowDoAI(unittest.TestCase):
 
         result = main("test query")
 
-        expected_output = "Error: API request failed: Internal Server Error"
+        expected_output = {
+            "error": "Error: API request failed: Internal Server Error"}
         self.assertEqual(result, expected_output)
 
 
@@ -76,11 +91,11 @@ class TestHowDoAIMaxWords(unittest.TestCase):
 
         result = main("how to create a tar archive", max_words=10)
 
-        word_count = len(result.split())
-        self.assertLessEqual(
-            word_count, 10, f"Output exceeded 10 words: {result}")
-        self.assertIn("<result>", result)
-        self.assertIn("</result>", result)
+        word_count = len(result["answer"].split())
+        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {
+            result['answer']}")
+        self.assertIn("<result>", result["answer"])
+        self.assertIn("</result>", result["answer"])
 
 
 class TestHowDoAICLI(unittest.TestCase):
@@ -89,24 +104,25 @@ class TestHowDoAICLI(unittest.TestCase):
     @patch('howdoai.call_ai_api')
     def test_cli_max_words(self, mock_call_ai_api, mock_stdout):
         mock_call_ai_api.return_value = {
-            "choices": [
-                {
-                    "message": {
-                        "content": "To create a tar archive, use the following command: tar -cvf archive.tar file1 file2 directory/. This will package the specified files and directories into a single archive file."
-                    }
+        "choices": [
+            {
+                "message": {
+                    "content": "To create a tar archive, use the following command: tar -cvf archive.tar file1 file2 directory/. This will package the specified files and directories into a single archive file."
                 }
-            ]
-        }
+            }
+        ]
+    }
 
         main_cli()
 
         output = mock_stdout.getvalue().strip()
-        word_count = len(output.split())
-
-        self.assertLessEqual(
-            word_count, 10, f"Output exceeded 10 words: {output}")
-        self.assertIn("<result>", output)
-        self.assertIn("</result>", output)
+        answer_line = output.split('\n')[0]  # Get the first line, which should be the answer
+        word_count = len(answer_line.split())
+        
+        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {answer_line}")
+        self.assertIn("<result>", answer_line)
+        self.assertIn("</result>", answer_line)
+        self.assertIn("Follow-up questions:", output)
 
     @patch('sys.argv', ['howdoai', 'how to create a tar archive'])
     @patch('sys.stdout', new_callable=StringIO)
@@ -196,6 +212,7 @@ class TestHelperFunctions(unittest.TestCase):
 
 # Add this after the TestHowDoAICLI class and before the TestHelperFunctions class
 
+
 class TestHowDoAIIntegration(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None  # This will show the full diff for any failures
@@ -219,6 +236,66 @@ class TestHowDoAIIntegration(unittest.TestCase):
         self.assertIn("<result>", result)
         self.assertIn("Paris", result)
         self.assertIn("</result>", result)
+
+
+class TestHowDoAIFollowUpQuestions(unittest.TestCase):
+    @patch('howdoai.call_ai_api')
+    def test_generate_follow_up_questions(self, mock_call_ai_api):
+        # Mock the initial response
+        mock_call_ai_api.side_effect = [
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "Quantum computing is a type of computation that harnesses the collective properties of quantum states, such as superposition, interference, and entanglement, to perform calculations."
+                        }
+                    }
+                ]
+            },
+            {
+                "choices": [
+                    {
+                        "message": {
+                            "content": "1. What are the practical applications of quantum computing?\n2. How does quantum computing differ from classical computing?\n3. What are the current challenges in quantum computing research?\n4. Can you explain the concept of quantum entanglement?\n5. How close are we to achieving practical quantum computers?"
+                        }
+                    }
+                ]
+            }
+        ]
+
+        # Call the main function with the initial query
+        initial_query = "What is quantum computing?"
+        result = main(initial_query)
+
+        # Assert that we get a dictionary with 'answer' and 'follow_up_questions' keys
+        self.assertIn('answer', result)
+        self.assertIn('follow_up_questions', result)
+
+        follow_up_questions = result['follow_up_questions']
+
+        # Assert that we get a list of questions
+        self.assertIsInstance(follow_up_questions, list)
+        
+        # Assert that we get at least 3 follow-up questions
+        self.assertGreaterEqual(len(follow_up_questions), 3)
+
+        # Assert that each question is a string and ends with a question mark
+        for question in follow_up_questions:
+            self.assertIsInstance(question, str)
+            self.assertTrue(question.endswith('?'))
+
+        # Assert that the follow-up questions are relevant to quantum computing
+        relevant_keywords = ['quantum', 'computing', 'superposition', 'entanglement', 'qubit']
+        self.assertTrue(any(any(keyword in question.lower() for keyword in relevant_keywords) for question in follow_up_questions))
+
+    @patch('howdoai.call_ai_api')
+    def test_generate_follow_up_questions_error(self, mock_call_ai_api):
+        mock_call_ai_api.side_effect = Exception("API Error")
+
+        result = main("What is quantum computing?")
+
+        self.assertIn('error', result)
+        self.assertIn('API Error', result['error'])
 
 
 if __name__ == '__main__':
