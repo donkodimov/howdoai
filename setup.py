@@ -12,7 +12,7 @@ setup(
        ],
        entry_points={
            'console_scripts': [
-               'howdoai = howdoai:main',
+               'howdoai = howdoai:main_cli',
            ],
        },
    )
