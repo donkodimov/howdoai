@@ -35,23 +35,24 @@ def main(query=None):
             else:
                 output = f"<result>{answer}</result>"
 
-            print(output)  # Keep this for command-line usage
-            return output  # Add this line to return the output
+            return output  # Only return the output, don't print it here
 
         else:
             error_message = f"Error: Request failed with status code {response.status_code}\nResponse: {response.text}"
-            print(error_message)
             return error_message
 
     except requests.exceptions.RequestException as e:
         error_message = f"Error: An unexpected error occurred while making the request\n{str(e)}"
-        print(error_message)
         return error_message
 
     except (KeyError, IndexError, json.JSONDecodeError) as e:
         error_message = f"Error: An unexpected error occurred while parsing the response\n{str(e)}"
-        print(error_message)
         return error_message
+    
+def main_cli():
+    result = main()
+    print(result)
 
 if __name__ == "__main__":
-    main()
+    result = main()
+    print(result)  # Print the result only when run as a script
