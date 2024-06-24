@@ -70,7 +70,7 @@ def generate_follow_up_questions(initial_query: str, initial_response: str) -> L
 
 
 def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
-    print(f"Main function called with query: {query}")  # Add this line
+
     try:
         result = call_ai_api(query)
         answer = result.content.strip()
