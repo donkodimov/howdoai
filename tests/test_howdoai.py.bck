@@ -8,7 +8,7 @@ import os
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 import requests
-from howdoai import main, main_cli, format_response, generate_follow_up_questions
+from howdoai import main, main_cli, format_response, generate_follow_up_questions, AIResponse, AIRequestError
 from howdoai.api_client import call_ai_api, AIResponse, AIRequestError
 
 def integration_test(func):
@@ -21,30 +21,13 @@ class TestHowDoAI(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
 
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_response_with_code(self, mock_call_ai_api):
-        """
-        Test the response with code for creating a tar archive.
-
-        This test case mocks the call to the AI API and verifies that the response
-        contains the expected code snippet for creating a tar archive. It also checks
-        that the follow-up questions are returned as a list and that there are at least
-        three follow-up questions.
-
-        Mocked AI response:
-        The mocked AI response contains a code snippet for creating a tar archive.
-
-        Expected output:
-        The expected output is a dictionary with the answer containing the code snippet
-        and the follow-up questions.
-
-        """
         mock_call_ai_api.return_value = AIResponse(
             content="To create a tar archive, use the following command:\n\n```\ntar -cvf archive.tar file1 file2 directory/\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory."
         )
 
         result = main("how to create a tar archive")
-        print(f"Result: {result}")  # Add this line
 
         expected_output = {
             "answer": "<code>\ntar -cvf archive.tar file1 file2 directory/\n</code>",
@@ -54,11 +37,7 @@ class TestHowDoAI(unittest.TestCase):
         self.assertIsInstance(result["follow_up_questions"], list)
         self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
 
-        # Ensure the mock was called
-        #mock_call_ai_api.assert_called_once()
-
-
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_response_without_code(self, mock_call_ai_api):
         mock_call_ai_api.return_value = AIResponse(
             content="The capital of France is Paris."
@@ -72,11 +51,19 @@ class TestHowDoAI(unittest.TestCase):
         }
         self.assertEqual(result["answer"], expected_output["answer"])
         self.assertIsInstance(result["follow_up_questions"], list)
-        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)         
+        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
 
+    @patch('howdoai.api_client.call_ai_api')
+    def test_error_response(self, mock_call_ai_api):
+        mock_call_ai_api.side_effect = AIRequestError("API request failed: Internal Server Error")
+
+        result = main("test query")
+
+        expected_output = {"error": "Error: API request failed: Internal Server Error"}
+        self.assertEqual(result, expected_output)
 
 class TestHowDoAIMaxWords(unittest.TestCase):
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_max_words_limit(self, mock_call_ai_api):
         mock_call_ai_api.return_value = AIResponse(
             content="To create a tar archive, use the following command: tar -cvf archive.tar file1 file2 directory/. This will package the specified files and directories into a single archive file."
@@ -92,21 +79,8 @@ class TestHowDoAIMaxWords(unittest.TestCase):
 class TestHowDoAICLI(unittest.TestCase):
     @patch('sys.argv', ['howdoai', '--max-words', '10', 'how to create a tar archive'])
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_cli_max_words(self, mock_call_ai_api, mock_stdout):
-        """
-        Test case for the `main_cli` function with the `--max-words` option.
-
-        This test case verifies that the output of the `main_cli` function does not exceed the specified maximum word count.
-
-        Args:
-            self: The test case object.
-            mock_call_ai_api: The mock object for the `call_ai_api` function.
-            mock_stdout: The mock object for the standard output.
-
-        Returns:
-            None
-        """
         mock_call_ai_api.return_value = AIResponse(
             content="To create a tar archive, use the following command: tar -cvf archive.tar file1 file2 directory/. This will package the specified files and directories into a single archive file."
         )
@@ -114,27 +88,30 @@ class TestHowDoAICLI(unittest.TestCase):
         main_cli()
 
         output = mock_stdout.getvalue().strip()
-        answer_line = output.split('\n')[1]  # Get the second line, which should be the answer
+        answer_line = output.split('\n')[0]  # Get the first line, which should be the answer
         word_count = len(answer_line.split())
-
+        
         self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {answer_line}")
+        self.assertIn("<result>", answer_line)
+        self.assertIn("</result>", answer_line)
+        self.assertIn("Follow-up questions:", output)
         self.assertTrue(answer_line.startswith("<result>") or answer_line.startswith("<code>"))
         self.assertTrue(answer_line.endswith("</result>") or answer_line.endswith("</code>"))
-        self.assertIn("Follow-up questions:", output)
 
     @patch('sys.argv', ['howdoai', 'how to create a tar archive'])
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_cli_without_max_words(self, mock_call_ai_api, mock_stdout):
         mock_call_ai_api.return_value = AIResponse(
             content="To create a tar archive, use the command: tar -cvf archive.tar file1 file2 directory/"
         )
+
         main_cli()
+
         output = mock_stdout.getvalue().strip()
         self.assertIn("<result>", output)
         self.assertIn("tar -cvf archive.tar", output)
         self.assertIn("</result>", output)
-
         
     @patch('sys.argv', ['howdoai'])
     @patch('sys.stdout', new_callable=StringIO)
@@ -255,18 +232,15 @@ class TestHowDoAIFollowUpQuestions(unittest.TestCase):
         # Assert that the follow-up questions are relevant to quantum computing
         relevant_keywords = ['quantum', 'computing', 'superposition', 'entanglement', 'qubit']
         self.assertTrue(any(any(keyword in question.lower() for keyword in relevant_keywords) for question in follow_up_questions))
-        
 
-    @patch('howdoai.call_ai_api')
+    @patch('howdoai.api_client.call_ai_api')
     def test_generate_follow_up_questions_error(self, mock_call_ai_api):
-        mock_call_ai_api.side_effect = [
-            AIResponse(content="Quantum computing is ..."),  # First call for the main query
-            AIRequestError("API Error")  # Second call for follow-up questions
-        ]
-        result = main("What is quantum computing?")
-        self.assertIn('error', result)
-        self.assertIn('Error generating follow-up questions', result['error'])
+        mock_call_ai_api.side_effect = AIRequestError("API Error")
 
+        result = main("What is quantum computing?")
+
+        self.assertIn('error', result)
+        self.assertIn('API Error', result['error'])
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
