@@ -30,11 +30,11 @@ To install the `howdoai` CLI tool, follow these steps:
 You can use `howdoai` in two ways:
 
 1. As a command-line tool:
-   ```
+   ```bash
    howdoai "your question here"
    ```
    For example:
-   ```
+   ```bash
    howdoai "how to create a tar archive"
    ```
 
@@ -48,18 +48,27 @@ You can use `howdoai` in two ways:
 
 You can also limit the number of words in the response using the `--max-words` option:
 
-```
+```bash
 howdoai --max-words 20 "how to create a tar archive"
 ```
 
 The `howdoai` tool will query the AI endpoint and provide you with a concise answer to your question. If the answer contains code, it will be wrapped in triple backticks (```).
+
+To use the Groq API with `howdoai`, simply append the `--groq` option to your command. Here's an example:
+
+```bash
+howdoai --groq "Your query here"
+```
+
+This command sends your query to the Groq API and displays the response in your terminal.
+
 
 ## Examples
 
 Here are a few examples of using the `howdoai` CLI tool:
 
 1. How to create a tar archive:
-   ```
+   ```bash
    howdoai "howdoai make a tar archive"
    ```
    Output:
@@ -70,7 +79,7 @@ Here are a few examples of using the `howdoai` CLI tool:
    ```
 
 2. How to find the size of a directory:
-   ```
+   ```bash
    howdoai "howdoai find the size of a directory"
    ```
    Output:
@@ -81,7 +90,7 @@ Here are a few examples of using the `howdoai` CLI tool:
    ```
 
 3. How to check the disk space usage:
-   ```
+   ```bash
    howdoai "howdoai check disk space usage"
    ```
    Output:
@@ -90,32 +99,48 @@ Here are a few examples of using the `howdoai` CLI tool:
    </result>
    ```
 
+4. How to use the `howdoai`CLI tool with groq api:
+   ```bash
+   howdoai --groq "how to create tar archive"
+   ```
+   
+
 Feel free to ask any "how-to" question, and the `howdoai` tool will provide you with a helpful answer!
 
 ## Features
 
 - Provides concise, one-line answers to "how-to" questions
-- Includes code snippets or commands when relevant, wrapped in `<code>` tags
-- Non-code answers are wrapped in `<result>` tags
-- Uses an AI-powered backend for generating responses
+- Includes code snippets or commands when relevant
+- Uses an local and remote AI-powered backend for generating responses
 
 ## Configuration
 
-The `howdoai` CLI tool uses a pre-configured AI endpoint to generate answers. If you want to modify the endpoint or adjust the AI model settings, you can update the `API_URL` and `call_ai_api` function in the `__init__.py` file:
+The `howdoai` CLI tool uses a pre-configured AI local or remote endpoint to generate answers. If you want to modify the endpoint or adjust the AI model settings, you can update the `LOCAL_API_URL` and `call_ai_api` function in the `api_client.py` file:
 
 ```python
 API_URL = "http://localhost:1234/v1/chat/completions"
 
 def call_ai_api(query: str) -> Dict[str, Any]:
-    headers = {"Content-Type": "application/json"}
+    if use_groq:
+        api_url = GROQ_API_URL
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {GROQ_API_KEY}"
+        }
+        model = GROQ_MODEL
+    else:
+        api_url = LOCAL_API_URL
+        headers = {"Content-Type": "application/json"}
+        model = LOCAL_MODEL
+
     data = {
-        "model": "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF",
+        "model": model,
         "messages": [
             {"role": "system", "content": SYSTEM_MESSAGE},
             {"role": "user", "content": query if query else ""}
         ],
-        "temperature": 0.7,
-        "max_tokens": 100,
+        "temperature": DEFAULT_TEMPERATURE,
+        "max_tokens": DEFAULT_MAX_TOKENS,
         "stream": False
     }
     ...
@@ -125,7 +150,7 @@ def call_ai_api(query: str) -> Dict[str, Any]:
 
 To run the tests, use the following command from the root directory of the project:
 
-```
+```bash
 python -m unittest discover tests
 ```
 
@@ -133,10 +158,25 @@ You can change the `model`, `temperature`, `max_tokens`, and other parameters ac
 
 Note: The test suite includes integration tests that make actual API calls. To skip these tests, set the `SKIP_INTEGRATION_TESTS` environment variable:
 
-```
+```bash
 export SKIP_INTEGRATION_TESTS=1
 python -m unittest discover tests
 ```
+
+### Environment Configuration
+
+Before using the `--groq` option, ensure you have set up the necessary environment variables:
+
+- `GROQ_API_KEY`: Your API key for accessing the Groq API.
+- `GROQ_ENDPOINT`: The endpoint URL for the Groq API.
+
+Example:
+
+```bash
+export GROQ_API_KEY="your_api_key_here"
+export GROQ_ENDPOINT="https://api.groq.com/v1"
+```
+
 ## Troubleshooting
 
 If you encounter any issues while using `howdoai`, try the following:
@@ -145,6 +185,14 @@ If you encounter any issues while using `howdoai`, try the following:
 2. Check your internet connection, as the tool requires access to the AI endpoint.
 3. If you receive an error about the AI endpoint, make sure it's running and accessible.
 4. For any other issues, please open an issue on the GitHub repository.
+
+If you encounter any issues while using the `--groq` option:
+
+1. Ensure your `GROQ_API_KEY` and `GROQ_ENDPOINT` environment variables are correctly set.
+2. Verify that the Groq API is currently accessible and operational.
+3. Check if your query is correctly formatted and adheres to the Groq API's requirements.
+4. For detailed error messages, use the `--verbose` option with your command.
+
 
 ## Error Handling
 

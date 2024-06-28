@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 from io import StringIO
 import sys
 import os
@@ -313,6 +313,89 @@ class TestMainCLI(unittest.TestCase):
         self.assertIn("usage:", output)
         self.assertIn("howdoai", output)
         mock_exit.assert_called_once_with(1)
+
+class TestHowDoAIGroq(unittest.TestCase):
+    @patch('howdoai.api_client.requests.post')
+    def test_call_ai_api_local(self, mock_post):
+        """
+        Test case for calling the AI API locally.
+
+        This test case mocks the response from the AI API and verifies that the correct content is returned.
+
+        Args:
+            mock_post: The mock object for the requests.post method.
+
+        Returns:
+            None
+        """
+
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Local API response"}}]}
+        mock_post.return_value = mock_response
+
+        result = call_ai_api("Test query", use_groq=False)
+        
+        self.assertEqual(result.content, "Local API response")
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertEqual(args[0], "http://localhost:1234/v1/chat/completions")
+        self.assertNotIn('Authorization', kwargs['headers'])
+
+    @patch('howdoai.api_client.requests.post')
+    def test_call_ai_api_groq(self, mock_post):
+        """
+        Test case for calling the AI API with Groq.
+
+        This test case verifies that the `call_ai_api` function correctly calls the AI API with the specified query
+        and uses the Groq API endpoint. It checks that the response content is as expected and that the necessary
+        headers and URL are set correctly.
+
+        Args:
+            mock_post (MagicMock): The mock object for the `requests.post` function.
+
+        Returns:
+            None
+        """
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = {"choices": [{"message": {"content": "Groq API response"}}]}
+        mock_post.return_value = mock_response
+
+        result = call_ai_api("Test query", use_groq=True)
+        
+        self.assertEqual(result.content, "Groq API response")
+        mock_post.assert_called_once()
+        args, kwargs = mock_post.call_args
+        self.assertEqual(args[0], "https://api.groq.com/openai/v1/chat/completions")
+        self.assertIn('Authorization', kwargs['headers'])
+        self.assertTrue(kwargs['headers']['Authorization'].startswith('Bearer '))
+
+    @patch('sys.argv', ['howdoai', '--groq', 'test query'])
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('howdoai.call_ai_api')
+    def test_main_cli_with_groq_flag(self, mock_call_ai_api, mock_stdout):
+        """
+        Test case for the main_cli function when the --groq flag is used.
+        
+        This test case verifies that the main_cli function correctly calls the AI API with the provided Groq query,
+        and that the expected output is printed to the standard output.
+        """
+        mock_call_ai_api.return_value = AIResponse(content="Groq API test response")
+        
+        main_cli()
+        
+        output = mock_stdout.getvalue()
+        self.assertIn("Groq API test response", output)
+        self.assertIn("Using Groq API endpoint", output)
+
+        expected_calls = [
+            call("test query", True),
+            call("\n        Based on the following question and answer, generate 5 relevant follow-up questions:\n\n        Question: test query\n        Answer: Groq API test response\n\n        Follow-up questions:\n        1.\n        ", True)
+            ]
+        mock_call_ai_api.assert_has_calls(expected_calls, any_order=False)
+        self.assertEqual(mock_call_ai_api.call_count, 2)
+        
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
