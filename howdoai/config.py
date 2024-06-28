@@ -24,4 +24,4 @@ DEFAULT_MAX_TOKENS = 150
 DEFAULT_TEMPERATURE = 0.7
 
 LOCAL_MODEL = "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF"
-GROQ_MODEL = "mixtral-8x7b-32768"
+GROQ_MODEL = "llama3-70b-8192"
