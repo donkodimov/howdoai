@@ -2,6 +2,7 @@ import sys
 import argparse
 from typing import Optional, Dict, Any, List
 import random
+import time
 from dataclasses import dataclass
 
 from rich.console import Console
@@ -14,6 +15,7 @@ from .config import API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERA
 # Constants
 MAX_FOLLOW_UP_QUESTIONS = 5
 MIN_FOLLOW_UP_QUESTIONS = 3
+start_time = time.time()
 
 # Initialize Rich console
 console = Console()
@@ -80,7 +82,8 @@ def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
         
         return {
             "answer": formatted_answer,
-            "follow_up_questions": follow_up_questions
+            "follow_up_questions": follow_up_questions,
+            "execution_time": f"{time.time() - start_time:.2f} seconds"
         }
     except AIRequestError as e:
         return {"error": f"Error: {str(e)}"}
@@ -121,6 +124,7 @@ def main_cli() -> None:
             console.print("\n[bold]Follow-up questions:[/bold]")
             for i, question in enumerate(result["follow_up_questions"], 1):
                 console.print(f"{question}")
+        console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
 
 if __name__ == "__main__":
     main_cli()
