@@ -49,7 +49,6 @@ class TestHowDoAI(unittest.TestCase):
         )
 
         result = main("how to create a tar archive")
-        print(f"Result: {result}")  # Add this line
 
         expected_output = {
             "answer": "To create a tar archive, use the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 directory/\n\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory.",
@@ -200,17 +199,14 @@ class TestHowDoAIIntegration(unittest.TestCase):
     def test_integration_code_response(self):
         query = "how to create a tar archive"
         result = main(query)
-        print(f"\nQuery: {query}")
-        print(f"Result:\n{result}")
         self.assertIn("tar", result["answer"])
+        self.assertGreaterEqual(float(result["execution_time"].split(" ")[0]), 0)
 
 
     @integration_test
     def test_integration_text_response(self):
         query = "what is the capital of France"
         result = main(query)
-        print(f"\nQuery: {query}")
-        print(f"Result:\n{result}")
         self.assertIn("Paris", result["answer"])
 
 class TestHowDoAIFollowUpQuestions(unittest.TestCase):
