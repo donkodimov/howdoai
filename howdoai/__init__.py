@@ -2,7 +2,12 @@ import sys
 import argparse
 from typing import Optional, Dict, Any, List
 import random
+import time
 from dataclasses import dataclass
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
 
 from .api_client import call_ai_api
 from .config import API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
@@ -10,16 +15,17 @@ from .config import API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERA
 # Constants
 MAX_FOLLOW_UP_QUESTIONS = 5
 MIN_FOLLOW_UP_QUESTIONS = 3
+start_time = time.time()
 
+# Initialize Rich console
+console = Console()
 
 @dataclass
 class AIResponse:
     content: str
 
-
 class AIRequestError(Exception):
     pass
-
 
 def truncate_to_word_limit(text: str, max_words: int) -> str:
     words = text.split()
@@ -30,19 +36,14 @@ def truncate_to_word_limit(text: str, max_words: int) -> str:
         truncated += '...'
     return truncated
 
-
 def format_response(answer: str, max_words: Optional[int] = None) -> str:
-    if "```" in answer:
-        code_start = answer.find("```") + 3
-        code_end = answer.rfind("```")
-        if code_end > code_start:
-            code = answer[code_start:code_end].strip()
-            return f"<code>\n{code}\n</code>"
     if max_words:
         answer = truncate_to_word_limit(answer, max_words)
-    return f"<result>{answer}</result>"
-
-
+    
+    # Ensure code blocks start on a new line
+    answer = answer.replace("```", "\n```")
+    
+    return answer
 
 def generate_follow_up_questions(initial_query: str, initial_response: str) -> List[str]:
     try:
@@ -67,13 +68,11 @@ def generate_follow_up_questions(initial_query: str, initial_response: str) -> L
     except Exception as e:
         raise AIRequestError(f"Error generating follow-up questions: {str(e)}")
 
-
-
 def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
-
     try:
         result = call_ai_api(query)
         answer = result.content.strip()
+        
         formatted_answer = format_response(answer, max_words)
         
         try:
@@ -83,7 +82,8 @@ def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
         
         return {
             "answer": formatted_answer,
-            "follow_up_questions": follow_up_questions
+            "follow_up_questions": follow_up_questions,
+            "execution_time": f"{time.time() - start_time:.2f} seconds"
         }
     except AIRequestError as e:
         return {"error": f"Error: {str(e)}"}
@@ -116,15 +116,15 @@ def main_cli() -> None:
     
     result = main(args.query, args.max_words)
     if "error" in result:
-        print(result["error"])
+        console.print(Panel(result["error"], title="Error", border_style="red"))
     else:
-        print(result["answer"])
+        console.print(Panel(Markdown(result["answer"]), title="Answer", border_style="green"))
         
         if result["follow_up_questions"]:
-            print("\nFollow-up questions:")
+            console.print("\n[bold]Follow-up questions:[/bold]")
             for i, question in enumerate(result["follow_up_questions"], 1):
-                print(f"{i}. {question}")
-
+                console.print(f"{question}")
+        console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
 
 if __name__ == "__main__":
     main_cli()
