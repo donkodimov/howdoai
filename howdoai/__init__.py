@@ -9,8 +9,8 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 
-from .api_client import call_ai_api
-from .config import API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from .api_client import call_ai_api, AIResponse, AIRequestError
+from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
 
 # Constants
 MAX_FOLLOW_UP_QUESTIONS = 5
@@ -19,13 +19,6 @@ start_time = time.time()
 
 # Initialize Rich console
 console = Console()
-
-@dataclass
-class AIResponse:
-    content: str
-
-class AIRequestError(Exception):
-    pass
 
 def truncate_to_word_limit(text: str, max_words: int) -> str:
     words = text.split()
@@ -45,7 +38,7 @@ def format_response(answer: str, max_words: Optional[int] = None) -> str:
     
     return answer
 
-def generate_follow_up_questions(initial_query: str, initial_response: str) -> List[str]:
+def generate_follow_up_questions(initial_query: str, initial_response: str, use_groq: bool = False) -> List[str]:
     try:
         prompt = f"""
         Based on the following question and answer, generate 5 relevant follow-up questions:
@@ -57,7 +50,7 @@ def generate_follow_up_questions(initial_query: str, initial_response: str) -> L
         1.
         """
 
-        response = call_ai_api(prompt)
+        response = call_ai_api(prompt, use_groq)
         generated_text = response.content
         questions = [q.strip() for q in generated_text.split('\n') if q.strip().endswith('?')]
 
@@ -68,15 +61,15 @@ def generate_follow_up_questions(initial_query: str, initial_response: str) -> L
     except Exception as e:
         raise AIRequestError(f"Error generating follow-up questions: {str(e)}")
 
-def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
+def main(query: str, max_words: Optional[int] = None, use_groq: bool = False) -> Dict[str, Any]:
     try:
-        result = call_ai_api(query)
+        result = call_ai_api(query, use_groq)
         answer = result.content.strip()
         
         formatted_answer = format_response(answer, max_words)
         
         try:
-            follow_up_questions = generate_follow_up_questions(query, answer)
+            follow_up_questions = generate_follow_up_questions(query, answer, use_groq)
         except AIRequestError as e:
             return {"error": f"Error generating follow-up questions: {str(e)}"}
         
@@ -91,22 +84,10 @@ def main(query: str, max_words: Optional[int] = None) -> Dict[str, Any]:
         return {"error": f"Unexpected error: {str(e)}"}
 
 def main_cli() -> None:
-    """
-    Command-line interface for getting concise answers to how-to questions.
-
-    Usage:
-        python __init__.py [query] [--max-words MAX_WORDS]
-
-    Arguments:
-        query (str, optional): The question to ask.
-        --max-words (int, optional): Maximum number of words in the response.
-
-    Returns:
-        None
-    """
     parser = argparse.ArgumentParser(description='Get concise answers to how-to questions.')
     parser.add_argument('query', nargs='?', help='The question to ask')
     parser.add_argument('--max-words', type=int, help='Maximum number of words in the response')
+    parser.add_argument('--groq', '-g', action='store_true', help='Use Groq API endpoint')
     
     args = parser.parse_args()
     
@@ -114,7 +95,7 @@ def main_cli() -> None:
         parser.print_help()
         sys.exit(1)
     
-    result = main(args.query, args.max_words)
+    result = main(args.query, args.max_words, args.groq)
     if "error" in result:
         console.print(Panel(result["error"], title="Error", border_style="red"))
     else:
@@ -125,6 +106,11 @@ def main_cli() -> None:
             for i, question in enumerate(result["follow_up_questions"], 1):
                 console.print(f"{question}")
         console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
+        
+        if args.groq:
+            console.print("[bold blue]Using Groq API endpoint[/bold blue]")
+        else:
+            console.print("[bold green]Using local API endpoint[/bold green]")
 
 if __name__ == "__main__":
     main_cli()
