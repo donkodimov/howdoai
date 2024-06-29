@@ -51,6 +51,10 @@ You can also limit the number of words in the response using the `--max-words` o
 ```bash
 howdoai --max-words 20 "how to create a tar archive"
 ```
+To limit the number of tokens in the API request, use the --max-tokens or -t option:
+```bash
+howdoai --max-tokens 300 "how to create a tar archive"
+```
 
 The `howdoai` tool will query the AI endpoint and provide you with a concise answer to your question. If the answer contains code, it will be wrapped in triple backticks (```).
 
@@ -71,34 +75,14 @@ Here are a few examples of using the `howdoai` CLI tool:
    ```bash
    howdoai "howdoai make a tar archive"
    ```
-   Output:
-   ```
-   <code>
-   tar -czf myarchive.tar.gz /path/to/directory
-   </code>
-   ```
-
-2. How to find the size of a directory:
+2. How to find the size of a directory with a maximum of 20 words:
    ```bash
-   howdoai "howdoai find the size of a directory"
+   howdoai --max-words 20 "how to find the size of a directory"
    ```
-   Output:
-   ```
-   <code>
-   du -sh /path/to/directory
-   </code>
-   ```
-
-3. How to check the disk space usage:
+3. How to check the disk space usage with a maximum of 300 tokens:
    ```bash
-   howdoai "howdoai check disk space usage"
+   howdoai --max-tokens 300 "how to check disk space usage"
    ```
-   Output:
-   ```
-   <result>To check disk space usage on Windows, use the command `wmic diskdrive get size,freespace` or `fsutil volume get freespace` and on Linux/macOS, use `df -h` or `du -sh /`.
-   </result>
-   ```
-
 4. How to use the `howdoai`CLI tool with groq api:
    ```bash
    howdoai --groq "how to create tar archive"
@@ -112,6 +96,9 @@ Feel free to ask any "how-to" question, and the `howdoai` tool will provide you 
 - Provides concise, one-line answers to "how-to" questions
 - Includes code snippets or commands when relevant
 - Uses an local and remote AI-powered backend for generating responses
+- Allows limiting the number of words in the response
+- Allows limiting the number of tokens in the API request
+- Supports both local and Groq API endpoints
 
 ## Configuration
 
