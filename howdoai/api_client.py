@@ -1,5 +1,5 @@
 import requests
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from dataclasses import dataclass
 from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, GROQ_API_KEY, LOCAL_MODEL, GROQ_MODEL
 
@@ -10,13 +10,14 @@ class AIResponse:
 class AIRequestError(Exception):
     pass
 
-def call_ai_api(query: str, use_groq: bool = False) -> AIResponse:
+def call_ai_api(query: str, use_groq: bool = False, max_tokens: Optional[int] = None) -> AIResponse:
     """
     Calls the AI API with the given query and returns the AI response.
 
     Args:
         query (str): The user's query to be sent to the AI API.
         use_groq (bool): Whether to use the Groq API endpoint.
+        max_tokens (Optional[int]): Maximum number of tokens for the API request.
 
     Returns:
         AIResponse: The response from the AI API.
@@ -43,7 +44,7 @@ def call_ai_api(query: str, use_groq: bool = False) -> AIResponse:
             {"role": "user", "content": query if query else ""}
         ],
         "temperature": DEFAULT_TEMPERATURE,
-        "max_tokens": DEFAULT_MAX_TOKENS,
+        "max_tokens": max_tokens if max_tokens is not None else DEFAULT_MAX_TOKENS,
         "stream": False
     }
     

@@ -61,9 +61,9 @@ def generate_follow_up_questions(initial_query: str, initial_response: str, use_
     except Exception as e:
         raise AIRequestError(f"Error generating follow-up questions: {str(e)}")
 
-def main(query: str, max_words: Optional[int] = None, use_groq: bool = False) -> Dict[str, Any]:
+def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, max_tokens: Optional[int] = None) -> Dict[str, Any]:
     try:
-        result = call_ai_api(query, use_groq)
+        result = call_ai_api(query, use_groq, max_tokens)
         answer = result.content.strip()
         
         formatted_answer = format_response(answer, max_words)
@@ -76,7 +76,8 @@ def main(query: str, max_words: Optional[int] = None, use_groq: bool = False) ->
         return {
             "answer": formatted_answer,
             "follow_up_questions": follow_up_questions,
-            "execution_time": f"{time.time() - start_time:.2f} seconds"
+            "execution_time": f"{time.time() - start_time:.2f} seconds",
+            "max_tokens": max_tokens if max_tokens else "DEFAULT_MAX_TOKENS"
         }
     except AIRequestError as e:
         return {"error": f"Error: {str(e)}"}
@@ -88,6 +89,7 @@ def main_cli() -> None:
     parser.add_argument('query', nargs='?', help='The question to ask')
     parser.add_argument('--max-words', type=int, help='Maximum number of words in the response')
     parser.add_argument('--groq', '-g', action='store_true', help='Use Groq API endpoint')
+    parser.add_argument('--max-tokens', '-t', type=int, help='Maximum number of tokens for the API request')
     
     args = parser.parse_args()
     
@@ -95,7 +97,7 @@ def main_cli() -> None:
         parser.print_help()
         sys.exit(1)
     
-    result = main(args.query, args.max_words, args.groq)
+    result = main(args.query, args.max_words, args.groq, args.max_tokens)
     if "error" in result:
         console.print(Panel(result["error"], title="Error", border_style="red"))
     else:
