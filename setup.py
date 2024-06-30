@@ -9,6 +9,8 @@ setup(
        packages=find_packages(),
        install_requires=[
            'requests',
+           'rich',
+           'python-dotenv'
        ],
        entry_points={
            'console_scripts': [
