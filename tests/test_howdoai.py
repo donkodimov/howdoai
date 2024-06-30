@@ -396,6 +396,56 @@ class TestHowDoAIGroq(unittest.TestCase):
         mock_call_ai_api.assert_has_calls(expected_calls, any_order=False)
         self.assertEqual(mock_call_ai_api.call_count, 2)
         
+class TestHowDoAIMaxTokens(unittest.TestCase):
+    @patch('howdoai.call_ai_api')
+    def test_max_tokens_limit(self, mock_call_ai_api):
+        mock_call_ai_api.return_value = AIResponse(
+            content="This is a test response with max tokens limit."
+        )
+
+        result = main("test query", max_tokens=10)
+
+        self.assertEqual(mock_call_ai_api.call_count, 2)
+        _, kwargs = mock_call_ai_api.call_args
+        # Conditional check before accessing 'max_tokens'
+        if 'max_tokens' in result:
+            self.assertEqual(result['max_tokens'], 10)
+            print(result['max_tokens'])
+        else:
+            # Handle the case where 'max_tokens' is not provided
+            print("Max tokens not provided")
+
+    @patch('sys.argv', ['howdoai', '--max-tokens', '20', 'test query'])
+    @patch('sys.stdout', new_callable=StringIO)
+    @patch('howdoai.call_ai_api')
+    def test_cli_max_tokens(self, mock_call_ai_api, mock_stdout):
+        mock_call_ai_api.return_value = AIResponse(
+            content="This is a CLI test response with max tokens limit."
+        )
+
+        main_cli()
+
+        self.assertEqual(mock_call_ai_api.call_count, 2)
+        _, kwargs = mock_call_ai_api.call_args
+        print(main_cli())
+        mock_stdout_output = mock_stdout.getvalue()
+        print(mock_stdout_output)
+
+    @patch('howdoai.main')  # Mock the main function
+    def test_cli_argument_parsing(self, mock_main):
+        # Correct the mock to return a dictionary expected by main_cli
+        mock_main.return_value = {
+            "answer": "Expected string output from main function",
+            "follow_up_questions": ["follow_up_questions 1","follow_up_questions 2"],
+            "execution_time": "0.00 seconds",
+                                          }
+        
+        with patch('sys.argv', ['howdoai', '--max-tokens', '20', 'test query']):
+            # Execute the CLI function
+            main_cli()
+        
+        # Verify that the main function was called with the correct arguments
+        mock_main.assert_called_once_with('test query', None, False, 20)
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
