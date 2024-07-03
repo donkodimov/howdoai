@@ -19,11 +19,7 @@ class QuestionAnswerer:
     def generate_answer(self, query: str, use_groq: bool, max_tokens: Optional[int]) -> str:
         self.task_id = self.progress_manager.start_progress("Generating answer...")
         # Logic for generating the answer
-        #task1 = progress_manager.start_progress("Generating answer...")
-        # Simulating steps in API call and response processing
-        self.progress_manager.update_progress(self.task_id, 10, "[green]Preparing API request...")
-        time.sleep(0.5)  # Simulating network delay
-        self.progress_manager.update_progress(self.task_id, 20, "[green]Sending request to AI...")
+        self.progress_manager.update_progress(self.task_id, 30, "[green]Sending request to AI...")
         result = call_ai_api(query, use_groq, max_tokens)
         self.progress_manager.update_progress(self.task_id, 40, "[green]Processing AI response...")
         answer = result.content.strip()
