@@ -1,7 +1,15 @@
 from typing import Optional
 import time
+import random
 from .progressbarmanager import ProgressBarManager
-from .api_client import call_ai_api
+from .api_client import call_ai_api, AIRequestError
+
+from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+
+
+# Constants
+MAX_FOLLOW_UP_QUESTIONS = 5
+MIN_FOLLOW_UP_QUESTIONS = 3
 
 class QuestionAnswerer:
     def __init__(self, progress_manager: ProgressBarManager):
@@ -44,3 +52,30 @@ class QuestionAnswerer:
         if len(truncated) < len(text):
             truncated += '...'
         return truncated
+    
+    def generate_follow_up_questions(self, initial_query: str, initial_response: str, use_groq: bool, max_tokens: Optional[int]) -> str:
+        try:
+            prompt = f"""
+            Based on the following question and answer, generate 5 relevant follow-up questions:
+
+            Question: {initial_query}
+            Answer: {initial_response}
+
+            Follow-up questions:
+            1.
+            """
+            task = self.progress_manager.start_progress("[blue]Generating follow-up questions...")
+            self.progress_manager.update_progress(task, 10, "[blue]Preparing follow-up request...")
+            response = call_ai_api(prompt, use_groq, max_tokens)
+            self.progress_manager.update_progress(task, 50, "[blue]Processing follow-up response...")
+            generated_text = response.content
+            questions = [q.strip() for q in generated_text.split('\n') if q.strip().endswith('?')]
+
+            self.progress_manager.update_progress(task, 20, "[blue]Finalizing follow-up questions...")
+            while len(questions) < MIN_FOLLOW_UP_QUESTIONS:
+                questions.append(f"Can you elaborate more on {random.choice(['the topic', 'this subject', 'this area', 'this concept'])}?")
+
+            self.progress_manager.complete_progress(task, "[blue]Follow-up questions generated")
+            return questions[:MAX_FOLLOW_UP_QUESTIONS]
+        except Exception as e:
+            raise AIRequestError(f"Error generating follow-up questions: {str(e)}")
