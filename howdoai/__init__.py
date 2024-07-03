@@ -8,7 +8,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
 
-from .api_client import AIRequestError
+from .api_client import AIRequestError, call_ai_api
 from .config import config
 from .progressbarmanager import ProgressBarManager
 from .questionanswerer import QuestionAnswerer
