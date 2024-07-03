@@ -4,12 +4,12 @@ import random
 from .progressbarmanager import ProgressBarManager
 from .api_client import call_ai_api, AIRequestError
 
-from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from .config import config
 
 
 # Constants
-MAX_FOLLOW_UP_QUESTIONS = 5
-MIN_FOLLOW_UP_QUESTIONS = 3
+MAX_FOLLOW_UP_QUESTIONS = config.MAX_FOLLOW_UP_QUESTIONS
+MIN_FOLLOW_UP_QUESTIONS = config.MIN_FOLLOW_UP_QUESTIONS
 
 class QuestionAnswerer:
     def __init__(self, progress_manager: ProgressBarManager):

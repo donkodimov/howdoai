@@ -1,23 +1,21 @@
 import sys
 import argparse
 from typing import Optional, Dict, Any, List
-import random
 import time
 from dataclasses import dataclass
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.markdown import Markdown
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TimeElapsedColumn
 
-from .api_client import call_ai_api, AIResponse, AIRequestError
-from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE
+from .api_client import AIRequestError
+from .config import config
 from .progressbarmanager import ProgressBarManager
 from .questionanswerer import QuestionAnswerer
 
 # Constants
-MAX_FOLLOW_UP_QUESTIONS = 5
-MIN_FOLLOW_UP_QUESTIONS = 3
+MAX_FOLLOW_UP_QUESTIONS = config.MAX_FOLLOW_UP_QUESTIONS
+MIN_FOLLOW_UP_QUESTIONS = config.MIN_FOLLOW_UP_QUESTIONS
 
 # Initialize Rich console
 console = Console()    

@@ -1,7 +1,17 @@
 import requests
 from typing import Dict, Any, Optional
 from dataclasses import dataclass
-from .config import LOCAL_API_URL, GROQ_API_URL, SYSTEM_MESSAGE, DEFAULT_MAX_TOKENS, DEFAULT_TEMPERATURE, GROQ_API_KEY, LOCAL_MODEL, GROQ_MODEL
+from .config import config
+
+# Define all constants from the config class
+SYSTEM_MESSAGE = config.SYSTEM_MESSAGE
+DEFAULT_MAX_TOKENS = config.DEFAULT_MAX_TOKENS
+DEFAULT_TEMPERATURE = config.DEFAULT_TEMPERATURE
+GROQ_API_KEY = config.GROQ_API_KEY
+LOCAL_MODEL = config.LOCAL_MODEL
+GROQ_MODEL = config.GROQ_MODEL
+LOCAL_API_URL = config.LOCAL_API_URL
+GROQ_API_URL = config.GROQ_API_URL
 
 @dataclass
 class AIResponse:
@@ -47,7 +57,7 @@ def call_ai_api(query: str, use_groq: bool = False, max_tokens: Optional[int] = 
         "max_tokens": max_tokens if max_tokens is not None else DEFAULT_MAX_TOKENS,
         "stream": False
     }
-    
+
     try:
         response = requests.post(api_url, headers=headers, json=data)
         response.raise_for_status()
