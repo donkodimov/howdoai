@@ -15,10 +15,24 @@ GROQ_API_URL = config.GROQ_API_URL
 
 @dataclass
 class AIResponse:
+    """
+    Represents the response from the AI API.
+
+    Attributes:
+        content (str): The content of the response.
+    """
     content: str
 
 class AIRequestError(Exception):
-    pass
+    """
+    Exception raised for errors that occur during AI requests.
+
+    Attributes:
+        message -- explanation of the error
+    """
+    def __init__(self, message):
+        self.message = message
+        super().__init__(self.message)
 
 def call_ai_api(query: str, use_groq: bool = False, max_tokens: Optional[int] = None) -> AIResponse:
     """

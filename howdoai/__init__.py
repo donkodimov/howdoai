@@ -21,6 +21,23 @@ MIN_FOLLOW_UP_QUESTIONS = config.MIN_FOLLOW_UP_QUESTIONS
 console = Console()    
 
 def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, max_tokens: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Executes the main logic of the program.
+
+    Args:
+        query (str): The query string to be processed.
+        max_words (Optional[int], optional): The maximum number of words in the formatted answer. Defaults to None.
+        use_groq (bool, optional): Flag indicating whether to use GROQ for answer generation. Defaults to False.
+        max_tokens (Optional[int], optional): The maximum number of tokens for answer generation. Defaults to None.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the answer, follow-up questions, execution time, and max tokens used (if applicable).
+            - answer (str): The formatted answer.
+            - follow_up_questions (List[str]): A list of follow-up questions.
+            - execution_time (str): The execution time in seconds.
+            - max_tokens (Union[int, str]): The max tokens used or "DEFAULT_MAX_TOKENS" if not specified.
+            - error (str): An error message if an exception occurs during execution.
+    """
     start_time = time.time()
     
     with ProgressBarManager(console) as progress_manager:
@@ -42,6 +59,12 @@ def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, ma
             return {"error": f"Unexpected error: {str(e)}"}
 
 def main_cli() -> None:
+    """
+    Command-line interface for getting concise answers to how-to questions.
+    
+    This function parses command-line arguments, calls the main function with the provided arguments,
+    and prints the result to the console.
+    """
     parser = argparse.ArgumentParser(description='Get concise answers to how-to questions.')
     parser.add_argument('query', nargs='?', help='The question to ask')
     parser.add_argument('--max-words', type=int, help='Maximum number of words in the response')
