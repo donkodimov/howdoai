@@ -1,3 +1,9 @@
+from rich.console import Console
+from howdoai.progressbarmanager import ProgressBarManager
+from howdoai.questionanswerer import QuestionAnswerer
+from howdoai.api_client import call_ai_api, AIResponse, AIRequestError
+from howdoai import main, main_cli
+import requests
 import unittest
 from unittest.mock import patch, MagicMock, call
 from io import StringIO
@@ -6,11 +12,14 @@ import os
 import re
 
 # Add the parent directory to sys.path to allow imports from the howdoai package
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(
+    os.path.join(os.path.dirname(__file__), '..')))
 
-import requests
-from howdoai import main, main_cli, format_response, generate_follow_up_questions
-from howdoai.api_client import call_ai_api, AIResponse, AIRequestError
+
+def remove_ansi_escape_sequences(text):
+    ansi_escape_pattern = re.compile(r'(?:\x1b\[|\x9b)[0-?]*[ -\/]*[@-~]')
+    return ansi_escape_pattern.sub('', text)
+
 
 def integration_test(func):
     return unittest.skipIf(
@@ -18,16 +27,22 @@ def integration_test(func):
         'Skipping integration tests'
     )(func)
 
+
 def strip_ansi_escape_sequences(text):
     ansi_escape = re.compile(r'(?:\x1B[@-_][0-?]*[ -/]*[@-~])')
     return ansi_escape.sub('', text)
+
+
+questionanswerer = QuestionAnswerer(ProgressBarManager(console=Console()))
+
 
 class TestHowDoAI(unittest.TestCase):
     def setUp(self):
         self.maxDiff = None
 
-    @patch('howdoai.call_ai_api')
-    def test_response_with_code(self, mock_call_ai_api):
+    # @patch('howdoai.call_ai_api')
+    @patch('howdoai.QuestionAnswerer')
+    def test_response_with_code(self, mock_question_answerer):
         """
         Test the response with code for creating a tar archive.
 
@@ -44,12 +59,15 @@ class TestHowDoAI(unittest.TestCase):
         and the follow-up questions.
 
         """
-        mock_call_ai_api.return_value = AIResponse(
-            content="To create a tar archive, use the following command:\n\n```\ntar -cvf archive.tar file1 file2 directory/\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory."
-        )
 
-        result = main("how to create a tar archive")
+        mock_instance = mock_question_answerer.return_value
+        mock_instance.generate_answer.return_value = (
+            "To create a tar archive, use the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 directory/\n\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory.", "Mocked Task ID")
+        mock_instance.process_answer.return_value = "To create a tar archive, use the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 directory/\n\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory."
+        mock_instance.generate_follow_up_questions.return_value = [
+            "Mocked Follow-Up Question?", "Mocked Follow-Up Question 2?", "Mocked Follow-Up Question 3?"]
 
+        result = main("how to create a tar archive", use_groq=True)
         expected_output = {
             "answer": "To create a tar archive, use the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 directory/\n\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory.",
             "follow_up_questions": result["follow_up_questions"]
@@ -57,7 +75,6 @@ class TestHowDoAI(unittest.TestCase):
         self.assertEqual(result["answer"], expected_output["answer"])
         self.assertIsInstance(result["follow_up_questions"], list)
         self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
-
 
     @patch('howdoai.call_ai_api')
     def test_response_without_code(self, mock_call_ai_api):
@@ -73,7 +90,7 @@ class TestHowDoAI(unittest.TestCase):
         }
         self.assertEqual(result["answer"], expected_output["answer"])
         self.assertIsInstance(result["follow_up_questions"], list)
-        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)         
+        self.assertGreaterEqual(len(result["follow_up_questions"]), 3)
 
 
 class TestHowDoAIMaxWords(unittest.TestCase):
@@ -86,7 +103,9 @@ class TestHowDoAIMaxWords(unittest.TestCase):
         result = main("how to create a tar archive", max_words=10)
 
         word_count = len(result["answer"].split())
-        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {result['answer']}")
+        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {
+                             result['answer']}")
+
 
 class TestHowDoAICLI(unittest.TestCase):
     @patch('sys.argv', ['howdoai', '--max-words', '10', 'how to create a tar archive'])
@@ -113,26 +132,15 @@ class TestHowDoAICLI(unittest.TestCase):
         main_cli()
 
         output = mock_stdout.getvalue().strip()
-        answer_line = output.split('\n')[0]  # Get the first line, which should be the answer
+        # Get the first line, which should be the answer
+        answer_line = output.split('\n')[0]
         word_count = len(answer_line.split())
 
-        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {answer_line}")
+        self.assertLessEqual(
+            word_count, 10, f"Output exceeded 10 words: {answer_line}")
         self.assertIn("Follow-up questions:", output)
 
-    # @patch('sys.argv', ['howdoai', 'how to create a tar archive'])
-    # @patch('sys.stdout', new_callable=StringIO)
-    # @patch('howdoai.call_ai_api')
-    # def test_cli_without_max_words(self, mock_call_ai_api, mock_stdout):
-    #     mock_call_ai_api.return_value = AIResponse(
-    #         content="To create a tar archive, use the command: ```tar -cvf archive.tar file1 file2 directory/```"
-    #     )
-    #     main_cli()
-    #     output = mock_stdout.getvalue().strip()
-    #     #self.assertIn("n```", output)
-    #     #self.assertRegex(output, r'(?s).*```')
-    #     self.assertIn("tar -cvf archive.tar file1 file2 directory", output)
 
-        
     @patch('sys.argv', ['howdoai'])
     @patch('sys.stdout', new_callable=StringIO)
     @patch('sys.exit')
@@ -144,27 +152,33 @@ class TestHowDoAICLI(unittest.TestCase):
         self.assertIn("howdoai", output)
         mock_exit.assert_called_once_with(1)
 
+
 class TestHelperFunctions(unittest.TestCase):
+
     def test_format_response_with_code(self):
         input_text = "Here's a command:\n```\nls -la\n```\nThis lists files."
         expected_output = "Here's a command:\n\n```\nls -la\n\n```\nThis lists files."
-        self.assertEqual(format_response(input_text), expected_output)
+        self.assertEqual(questionanswerer.format_response(
+            input_text), expected_output)
 
     def test_format_response_without_code(self):
         input_text = "The capital of France is Paris."
         expected_output = "The capital of France is Paris."
-        self.assertEqual(format_response(input_text), expected_output)
+        self.assertEqual(questionanswerer.format_response(
+            input_text), expected_output)
 
     def test_format_response_with_max_words(self):
         input_text = "This is a long sentence that should be truncated."
         expected_output = "This is a long sentence..."
-        self.assertEqual(format_response(input_text, max_words=5), expected_output)
+        self.assertEqual(questionanswerer.format_response(
+            input_text, max_words=5), expected_output)
 
     @patch('howdoai.api_client.requests.post')
     def test_call_ai_api_success(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Test response"}}]}
+        mock_response.json.return_value = {"choices": [
+            {"message": {"content": "Test response"}}]}
         mock_post.return_value = mock_response
 
         result = call_ai_api("Test query")
@@ -172,7 +186,8 @@ class TestHelperFunctions(unittest.TestCase):
 
     @patch('howdoai.api_client.requests.post')
     def test_call_ai_api_failure(self, mock_post):
-        mock_post.side_effect = requests.exceptions.RequestException("API error")
+        mock_post.side_effect = requests.exceptions.RequestException(
+            "API error")
 
         with self.assertRaises(AIRequestError):
             call_ai_api("Test query")
@@ -181,7 +196,8 @@ class TestHelperFunctions(unittest.TestCase):
     def test_call_ai_api_empty_query(self, mock_post):
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Empty query response"}}]}
+        mock_response.json.return_value = {"choices": [
+            {"message": {"content": "Empty query response"}}]}
         mock_post.return_value = mock_response
 
         result = call_ai_api("")
@@ -190,6 +206,7 @@ class TestHelperFunctions(unittest.TestCase):
         # Check that the API was called with an empty string, not None
         called_data = mock_post.call_args[1]['json']
         self.assertEqual(called_data['messages'][1]['content'], "")
+
 
 class TestHowDoAIIntegration(unittest.TestCase):
     def setUp(self):
@@ -200,14 +217,15 @@ class TestHowDoAIIntegration(unittest.TestCase):
         query = "how to create a tar archive"
         result = main(query)
         self.assertIn("tar", result["answer"])
-        self.assertGreaterEqual(float(result["execution_time"].split(" ")[0]), 0)
-
+        self.assertGreaterEqual(
+            float(result["execution_time"].split(" ")[0]), 0)
 
     @integration_test
     def test_integration_text_response(self):
         query = "what is the capital of France"
         result = main(query)
         self.assertIn("Paris", result["answer"])
+
 
 class TestHowDoAIFollowUpQuestions(unittest.TestCase):
     @patch('howdoai.api_client.call_ai_api')
@@ -234,7 +252,7 @@ class TestHowDoAIFollowUpQuestions(unittest.TestCase):
 
         # Assert that we get a list of questions
         self.assertIsInstance(follow_up_questions, list)
-        
+
         # Assert that we get at least 3 follow-up questions
         self.assertGreaterEqual(len(follow_up_questions), 3)
 
@@ -244,19 +262,25 @@ class TestHowDoAIFollowUpQuestions(unittest.TestCase):
             self.assertTrue(question.endswith('?'))
 
         # Assert that the follow-up questions are relevant to quantum computing
-        relevant_keywords = ['quantum', 'computing', 'superposition', 'entanglement', 'qubit']
-        self.assertTrue(any(any(keyword in question.lower() for keyword in relevant_keywords) for question in follow_up_questions))
-        
+        relevant_keywords = ['quantum', 'computing',
+                             'superposition', 'entanglement', 'qubit']
+        self.assertTrue(any(any(keyword in question.lower(
+        ) for keyword in relevant_keywords) for question in follow_up_questions))
 
-    @patch('howdoai.call_ai_api')
-    def test_generate_follow_up_questions_error(self, mock_call_ai_api):
-        mock_call_ai_api.side_effect = [
-            AIResponse(content="Quantum computing is ..."),  # First call for the main query
-            AIRequestError("API Error")  # Second call for follow-up questions
-        ]
+    @patch('howdoai.QuestionAnswerer')
+    def test_generate_follow_up_questions_error(self, mock_question_answerer):
+        mock_instance = mock_question_answerer.return_value
+        mock_instance.generate_answer.return_value = (
+            "Quantum computing is ...", "Mocked Task ID")
+        mock_instance.process_answer.return_value = "To create a tar archive, use the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 directory/\n\n```\n\nThis will create an archive named 'archive.tar' containing the specified files and directory."
+        mock_instance.generate_follow_up_questions.side_effect = AIRequestError(
+            f"Error generating follow-up questions: API Error")
+
         result = main("What is quantum computing?")
+        print(result)
         self.assertIn('error', result)
         self.assertIn('Error generating follow-up questions', result['error'])
+
 
 class TestMainCLI(unittest.TestCase):
     @patch('sys.argv', ['howdoai', '--max-words', '10', 'how to create a tar archive'])
@@ -281,28 +305,13 @@ class TestMainCLI(unittest.TestCase):
         )
         main_cli()
         output = mock_stdout.getvalue().strip()
-        answer_line = output.split('\n')[0]  # Get the first line, which should be the answer
+        # Get the first line, which should be the answer
+        answer_line = output.split('\n')[0]
         word_count = len(answer_line.split())
-        self.assertLessEqual(word_count, 10, f"Output exceeded 10 words: {answer_line}")
+        self.assertLessEqual(
+            word_count, 10, f"Output exceeded 10 words: {answer_line}")
         self.assertIn("Follow-up questions:", output)
 
-
-
-    # @patch('sys.argv', ['howdoai', 'how to create a tar archive'])
-    # @patch('sys.stdout', new_callable=StringIO)
-    # @patch('howdoai.call_ai_api')
-    # def test_cli_without_max_words(self, mock_call_ai_api, mock_stdout):
-    #     mock_call_ai_api.return_value = AIResponse(
-    #         content="To create a tar archive, use the command: ```tar -cvf archive.tar file1 file2 directory/```"
-    #     )
-    #     main_cli()
-    #     output = mock_stdout.getvalue().strip()
-    #     # Strip ANSI escape sequences
-    #     clean_output = strip_ansi_escape_sequences(output)
-    #     print("Cleaned Output:", clean_output)
-    #     #output = re.sub(r'\x1b\[[^m]*m', '', output)  # remove ANSI escape codes
-    #     self.assertIn("tar -cvf archive", clean_output)
-    #     #self.assertIn("tar -cvf archive.tar file1 file2 directory", output)
 
     @patch('sys.argv', ['howdoai'])
     @patch('sys.stdout', new_callable=StringIO)
@@ -313,6 +322,7 @@ class TestMainCLI(unittest.TestCase):
         self.assertIn("usage:", output)
         self.assertIn("howdoai", output)
         mock_exit.assert_called_once_with(1)
+
 
 class TestHowDoAIGroq(unittest.TestCase):
     @patch('howdoai.api_client.requests.post')
@@ -331,11 +341,12 @@ class TestHowDoAIGroq(unittest.TestCase):
 
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Local API response"}}]}
+        mock_response.json.return_value = {"choices": [
+            {"message": {"content": "Local API response"}}]}
         mock_post.return_value = mock_response
 
         result = call_ai_api("Test query", use_groq=False)
-        
+
         self.assertEqual(result.content, "Local API response")
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
@@ -359,93 +370,99 @@ class TestHowDoAIGroq(unittest.TestCase):
         """
         mock_response = MagicMock()
         mock_response.status_code = 200
-        mock_response.json.return_value = {"choices": [{"message": {"content": "Groq API response"}}]}
+        mock_response.json.return_value = {"choices": [
+            {"message": {"content": "Groq API response"}}]}
         mock_post.return_value = mock_response
 
         result = call_ai_api("Test query", use_groq=True)
-        
+
         self.assertEqual(result.content, "Groq API response")
         mock_post.assert_called_once()
         args, kwargs = mock_post.call_args
-        self.assertEqual(args[0], "https://api.groq.com/openai/v1/chat/completions")
+        self.assertEqual(
+            args[0], "https://api.groq.com/openai/v1/chat/completions")
         self.assertIn('Authorization', kwargs['headers'])
-        self.assertTrue(kwargs['headers']['Authorization'].startswith('Bearer '))
+        self.assertTrue(kwargs['headers']
+                        ['Authorization'].startswith('Bearer '))
 
+    @patch('howdoai.main')
     @patch('sys.argv', ['howdoai', '--groq', 'test query'])
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('howdoai.call_ai_api')
-    def test_main_cli_with_groq_flag(self, mock_call_ai_api, mock_stdout):
-        """
-        Test case for the main_cli function when the --groq flag is used.
-        
-        This test case verifies that the main_cli function correctly calls the AI API with the provided Groq query,
-        and that the expected output is printed to the standard output.
-        """
-        mock_call_ai_api.return_value = AIResponse(content="Groq API test response")
-        
+    def test_main_cli_with_groq_flag(self, mock_stdout, mock_main):
+        mock_main.return_value = {
+            "answer": "Hello, World! example",
+            "follow_up_questions": ["Question 1?", "Question 2?", "Question 3?"],
+            "execution_time": "1.32 seconds"
+        }
         main_cli()
-        
-        output = mock_stdout.getvalue()
-        self.assertIn("Groq API test response", output)
-        self.assertIn("Using Groq API endpoint", output)
 
-        expected_calls = [
-            call("test query", True),
-            call("\n        Based on the following question and answer, generate 5 relevant follow-up questions:\n\n        Question: test query\n        Answer: Groq API test response\n\n        Follow-up questions:\n        1.\n        ", True)
-            ]
-        mock_call_ai_api.assert_has_calls(expected_calls, any_order=False)
-        self.assertEqual(mock_call_ai_api.call_count, 2)
-        
+        output = mock_stdout.getvalue()
+        output_cleaned = remove_ansi_escape_sequences(output)
+        print(output_cleaned)
+
+        self.assertIn("Hello, World! example", output_cleaned)
+        self.assertIn("Question 1?", output_cleaned)
+        self.assertIn("Using Groq API endpoint", output_cleaned)
+
+        mock_main.assert_called_once_with("test query", None, True, None)
+
+
 class TestHowDoAIMaxTokens(unittest.TestCase):
-    @patch('howdoai.call_ai_api')
-    def test_max_tokens_limit(self, mock_call_ai_api):
-        mock_call_ai_api.return_value = AIResponse(
-            content="This is a test response with max tokens limit."
-        )
+
+    @patch('howdoai.QuestionAnswerer')
+    def test_max_tokens_limit(self, mock_question_answerer):
+
+        mock_instance = mock_question_answerer.return_value
+        mock_instance.generate_answer.return_value = (
+            "Quantum computing is ...", "Mocked Task ID")
+        mock_instance.process_answer.return_value = "To create a tar archive, use\
+              the following command:\n\n\n```\ntar -cvf archive.tar file1 file2 \
+                directory/\n\n```\n\nThis will create an archive named \
+                    'archive.tar' containing the specified files and directory."
+        mock_instance.generate_follow_up_questions.side_effect = [
+            "Mocked Follow-Up Question?", "Mocked Follow-Up Question 2?",
+            "Mocked Follow-Up Question 3?"]
 
         result = main("test query", max_tokens=10)
-
-        self.assertEqual(mock_call_ai_api.call_count, 2)
-        _, kwargs = mock_call_ai_api.call_args
-        # Conditional check before accessing 'max_tokens'
-        if 'max_tokens' in result:
-            self.assertEqual(result['max_tokens'], 10)
-            print(result['max_tokens'])
-        else:
-            # Handle the case where 'max_tokens' is not provided
-            print("Max tokens not provided")
+        self.assertEqual(result["max_tokens"], 10)
+        self.assertLessEqual(float(result["execution_time"].split(" ")[0]), 0)
+        self.assertIn("To create a tar archive", result["answer"])
+        mock_instance.generate_answer.assert_called_once_with(
+            "test query", False, 10)
 
     @patch('sys.argv', ['howdoai', '--max-tokens', '20', 'test query'])
     @patch('sys.stdout', new_callable=StringIO)
-    @patch('howdoai.call_ai_api')
-    def test_cli_max_tokens(self, mock_call_ai_api, mock_stdout):
-        mock_call_ai_api.return_value = AIResponse(
-            content="This is a CLI test response with max tokens limit."
-        )
+    @patch('howdoai.main')
+    def test_cli_max_tokens(self, mock_main, mock_stdout):
+
+        mock_main.return_value = {
+            "answer": "Expected string output from main function",
+            "follow_up_questions": ["follow_up_questions 1", "follow_up_questions 2"],
+            "execution_time": "0.00 seconds",
+        }
 
         main_cli()
 
-        self.assertEqual(mock_call_ai_api.call_count, 2)
-        _, kwargs = mock_call_ai_api.call_args
-        print(main_cli())
-        mock_stdout_output = mock_stdout.getvalue()
-        print(mock_stdout_output)
+        self.assertEqual(mock_main.call_count, 1)
+        self.assertEqual(mock_main.call_args, call(
+            'test query', None, False, 20))
 
     @patch('howdoai.main')  # Mock the main function
     def test_cli_argument_parsing(self, mock_main):
         # Correct the mock to return a dictionary expected by main_cli
         mock_main.return_value = {
             "answer": "Expected string output from main function",
-            "follow_up_questions": ["follow_up_questions 1","follow_up_questions 2"],
+            "follow_up_questions": ["follow_up_questions 1", "follow_up_questions 2"],
             "execution_time": "0.00 seconds",
-                                          }
-        
+        }
+
         with patch('sys.argv', ['howdoai', '--max-tokens', '20', 'test query']):
             # Execute the CLI function
             main_cli()
-        
+
         # Verify that the main function was called with the correct arguments
         mock_main.assert_called_once_with('test query', None, False, 20)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
