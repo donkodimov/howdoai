@@ -100,12 +100,18 @@ class QuestionAnswerer:
         Returns:
             str: The truncated text.
         """
-        words = text.split()
-        if len(words) <= max_words:
+        # First, check if the text needs truncation
+        if len(text.split()) <= max_words:
             return text
+
+        # If truncation is needed, split the text into words
+        words = text.split()
         truncated = ' '.join(words[:max_words])
+
+        # Add ellipsis if the text was truncated
         if len(truncated) < len(text):
             truncated += '...'
+
         return truncated
     
     def generate_follow_up_questions(self, initial_query: str, initial_response: str, use_groq: bool, max_tokens: Optional[int]) -> str:
