@@ -41,11 +41,17 @@ def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, ma
     start_time = time.time()
     
     with ProgressBarManager(console) as progress_manager:
+        questionanswerer = QuestionAnswerer(progress_manager)
         try:
-            questionanswerer = QuestionAnswerer(progress_manager)
+            # Try to get main answer
             answer, task_id = questionanswerer.generate_answer(query, use_groq, max_tokens)
             formatted_answer = questionanswerer.process_answer(answer, max_words)
-            follow_up_questions = questionanswerer.generate_follow_up_questions(query, answer, use_groq, max_tokens)
+            
+            # Try to get follow-up questions, but don't fail if they error
+            try:
+                follow_up_questions = questionanswerer.generate_follow_up_questions(query, answer, use_groq, max_tokens)
+            except AIRequestError:
+                follow_up_questions = []
                     
             return {
                 "answer": formatted_answer,
@@ -54,9 +60,14 @@ def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, ma
                 "max_tokens": max_tokens if max_tokens else "DEFAULT_MAX_TOKENS"
             }
         except AIRequestError as e:
-            return {"error": f"Error: {str(e)}"}
-        except Exception as e:
-            return {"error": f"Unexpected error: {str(e)}"}
+            # Only return error response if the main answer generation fails
+            return {
+                "answer": f"Error: {str(e)}",
+                "follow_up_questions": [],
+                "execution_time": f"{time.time() - start_time:.2f} seconds",
+                "max_tokens": max_tokens if max_tokens else "DEFAULT_MAX_TOKENS",
+                "error": str(e)
+            }
 
 def main_cli() -> None:
     """
@@ -78,21 +89,23 @@ def main_cli() -> None:
         sys.exit(1)
     
     result = main(args.query, args.max_words, args.groq, args.max_tokens)
+    
     if "error" in result:
         console.print(Panel(result["error"], title="Error", border_style="red"))
     else:
         console.print(Panel(Markdown(result["answer"]), title="Answer", border_style="green"))
         
-        if result["follow_up_questions"]:
-            console.print("\n[bold]Follow-up questions:[/bold]")
-            for i, question in enumerate(result["follow_up_questions"], 1):
-                console.print(f"{question}")
-        console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
-        
-        if args.groq:
-            console.print("[bold blue]Using Groq API endpoint[/bold blue]")
-        else:
-            console.print("[bold green]Using local API endpoint[/bold green]")
+    # Always show follow-up questions section, even if empty
+    console.print("\n[bold]Follow-up questions:[/bold]")
+    for i, question in enumerate(result.get("follow_up_questions", []), 1):
+        console.print(f"{question}")
+    
+    console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
+    
+    if args.groq:
+        console.print("[bold blue]Using Groq API endpoint[/bold blue]")
+    else:
+        console.print("[bold green]Using local API endpoint[/bold green]")
 
 if __name__ == "__main__":
     main_cli()
