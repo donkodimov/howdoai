@@ -1,66 +1,86 @@
-import requests
-import json
 import sys
 import argparse
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
+import time
+from dataclasses import dataclass
+
+from rich.console import Console
+from rich.panel import Panel
+from rich.markdown import Markdown
+
+from .api_client import AIRequestError, call_ai_api
+from .config import config
+from .progressbarmanager import ProgressBarManager
+from .questionanswerer import QuestionAnswerer
 
 # Constants
-API_URL = "http://localhost:1234/v1/chat/completions"
-SYSTEM_MESSAGE = "You are an AI assistant that provides concise, one-line answers with the best example of how to complete a task. If the answer contains code or commands, wrap it in triple backticks (```)."
+MAX_FOLLOW_UP_QUESTIONS = config.MAX_FOLLOW_UP_QUESTIONS
+MIN_FOLLOW_UP_QUESTIONS = config.MIN_FOLLOW_UP_QUESTIONS
 
+# Initialize Rich console
+console = Console()    
 
-def truncate_to_word_limit(text: str, max_words: int) -> str:
-    words = text.split()
-    if len(words) <= max_words:
-        return text
-    truncated = ' '.join(words[:max_words])
-    if len(truncated) < len(text):
-        truncated += '...'
-    return truncated
+def main(query: str, max_words: Optional[int] = None, use_groq: bool = False, max_tokens: Optional[int] = None) -> Dict[str, Any]:
+    """
+    Executes the main logic of the program.
 
-def call_ai_api(query: str) -> Dict[str, Any]:
-    headers = {"Content-Type": "application/json"}
-    data = {
-        "model": "lmstudio-community/Meta-Llama-3-8B-Instruct-GGUF",
-        "messages": [
-            {"role": "system", "content": SYSTEM_MESSAGE},
-            {"role": "user", "content": query if query else ""}
-        ],
-        "temperature": 0.7,
-        "max_tokens": 100,
-        "stream": False
-    }
+    Args:
+        query (str): The query string to be processed.
+        max_words (Optional[int], optional): The maximum number of words in the formatted answer. Defaults to None.
+        use_groq (bool, optional): Flag indicating whether to use GROQ for answer generation. Defaults to False.
+        max_tokens (Optional[int], optional): The maximum number of tokens for answer generation. Defaults to None.
+
+    Returns:
+        Dict[str, Any]: A dictionary containing the answer, follow-up questions, execution time, and max tokens used (if applicable).
+            - answer (str): The formatted answer.
+            - follow_up_questions (List[str]): A list of follow-up questions.
+            - execution_time (str): The execution time in seconds.
+            - max_tokens (Union[int, str]): The max tokens used or "DEFAULT_MAX_TOKENS" if not specified.
+            - error (str): An error message if an exception occurs during execution.
+    """
+    start_time = time.time()
     
-    try:
-        response = requests.post(API_URL, headers=headers, json=data)
-        response.raise_for_status()
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        raise RuntimeError(f"API request failed: {str(e)}")
-
-def format_response(answer: str, max_words: Optional[int] = None) -> str:
-    if "```" in answer:
-        code_start = answer.find("```") + 3
-        code_end = answer.find("```", code_start)
-        code = answer[code_start:code_end].strip()
-        return f"<code>\n{code}\n</code>"
-    else:
-        if max_words:
-            answer = truncate_to_word_limit(answer, max_words)
-        return f"<result>{answer}</result>"
-
-def main(query: str, max_words: Optional[int] = None) -> str:
-    try:
-        result = call_ai_api(query)
-        answer = result["choices"][0]["message"]["content"].strip()
-        return format_response(answer, max_words)
-    except Exception as e:
-        return f"Error: {str(e)}"
+    with ProgressBarManager(console) as progress_manager:
+        questionanswerer = QuestionAnswerer(progress_manager)
+        try:
+            # Try to get main answer
+            answer, task_id = questionanswerer.generate_answer(query, use_groq, max_tokens)
+            formatted_answer = questionanswerer.process_answer(answer, max_words)
+            
+            # Try to get follow-up questions, but don't fail if they error
+            try:
+                follow_up_questions = questionanswerer.generate_follow_up_questions(query, answer, use_groq, max_tokens)
+            except AIRequestError:
+                follow_up_questions = []
+                    
+            return {
+                "answer": formatted_answer,
+                "follow_up_questions": follow_up_questions,
+                "execution_time": f"{time.time() - start_time:.2f} seconds",
+                "max_tokens": max_tokens if max_tokens else "DEFAULT_MAX_TOKENS"
+            }
+        except AIRequestError as e:
+            # Only return error response if the main answer generation fails
+            return {
+                "answer": f"Error: {str(e)}",
+                "follow_up_questions": [],
+                "execution_time": f"{time.time() - start_time:.2f} seconds",
+                "max_tokens": max_tokens if max_tokens else "DEFAULT_MAX_TOKENS",
+                "error": str(e)
+            }
 
 def main_cli() -> None:
+    """
+    Command-line interface for getting concise answers to how-to questions.
+    
+    This function parses command-line arguments, calls the main function with the provided arguments,
+    and prints the result to the console.
+    """
     parser = argparse.ArgumentParser(description='Get concise answers to how-to questions.')
     parser.add_argument('query', nargs='?', help='The question to ask')
     parser.add_argument('--max-words', type=int, help='Maximum number of words in the response')
+    parser.add_argument('--groq', '-g', action='store_true', help='Use Groq API endpoint')
+    parser.add_argument('--max-tokens', '-t', type=int, help='Maximum number of tokens for the API request')
     
     args = parser.parse_args()
     
@@ -68,8 +88,24 @@ def main_cli() -> None:
         parser.print_help()
         sys.exit(1)
     
-    result = main(args.query, args.max_words)
-    print(result)
+    result = main(args.query, args.max_words, args.groq, args.max_tokens)
+    
+    if "error" in result:
+        console.print(Panel(result["error"], title="Error", border_style="red"))
+    else:
+        console.print(Panel(Markdown(result["answer"]), title="Answer", border_style="green"))
+        
+    # Always show follow-up questions section, even if empty
+    console.print("\n[bold]Follow-up questions:[/bold]")
+    for i, question in enumerate(result.get("follow_up_questions", []), 1):
+        console.print(f"{question}")
+    
+    console.print(f"\n[italic]Execution time: {result['execution_time']}[/italic]")
+    
+    if args.groq:
+        console.print("[bold blue]Using Groq API endpoint[/bold blue]")
+    else:
+        console.print("[bold green]Using local API endpoint[/bold green]")
 
 if __name__ == "__main__":
     main_cli()
